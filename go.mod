@@ -11,7 +11,9 @@ require (
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/miekg/dns v1.1.58
 	github.com/patrickmn/go-cache v2.1.0+incompatible
-	github.com/quic-go/quic-go v0.41.0
+	// TODO(e.burkov):  Use stable version when it will contain the fix of
+	// race.
+	github.com/quic-go/quic-go v0.41.1-0.20240211032751-c786a46f42c5
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/exp v0.0.0-20240205201215-2c58cdc269a3
 	golang.org/x/net v0.20.0

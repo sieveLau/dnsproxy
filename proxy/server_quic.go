@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"net"
 	"time"
 
 	"github.com/AdguardTeam/dnsproxy/proxyutil"
@@ -14,7 +13,6 @@ import (
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/AdguardTeam/golibs/netutil"
 	"github.com/AdguardTeam/golibs/syncutil"
-	"github.com/bluele/gcache"
 	"github.com/miekg/dns"
 	"github.com/quic-go/quic-go"
 )
@@ -34,18 +32,6 @@ var compatProtoDQ = []string{NextProtoDQ, "doq-i02", "doq-i00", "dq"}
 // quic-go is 30 seconds, but our internal tests show that a higher value works
 // better for clients written with ngtcp2.
 const maxQUICIdleTimeout = 5 * time.Minute
-
-// quicAddrValidatorCacheSize is the size of the cache that we use in the QUIC
-// address validator.  The value is chosen arbitrarily and we should consider
-// making it configurable.
-// TODO(ameshkov): make it configurable.
-const quicAddrValidatorCacheSize = 1000
-
-// quicAddrValidatorCacheTTL is time-to-live for cache items in the QUIC address
-// validator.  The value is chosen arbitrarily and we should consider making it
-// configurable.
-// TODO(ameshkov): make it configurable.
-const quicAddrValidatorCacheTTL = 30 * time.Minute
 
 const (
 	// DoQCodeNoError is used when the connection or stream needs to be closed,
@@ -393,52 +379,13 @@ func closeQUICConn(conn quic.Connection, code quic.ApplicationErrorCode) {
 // newServerQUICConfig creates *quic.Config populated with the default settings.
 // This function is supposed to be used for both DoQ and DoH3 server.
 func newServerQUICConfig() (conf *quic.Config) {
-	v := newQUICAddrValidator(quicAddrValidatorCacheSize, quicAddrValidatorCacheTTL)
-
 	return &quic.Config{
-		MaxIdleTimeout:           maxQUICIdleTimeout,
-		MaxIncomingStreams:       math.MaxUint16,
-		MaxIncomingUniStreams:    math.MaxUint16,
-		RequireAddressValidation: v.requiresValidation,
+		MaxIdleTimeout:        maxQUICIdleTimeout,
+		MaxIncomingStreams:    math.MaxUint16,
+		MaxIncomingUniStreams: math.MaxUint16,
 		// Enable 0-RTT by default for all connections on the server-side.
 		Allow0RTT: true,
 	}
-}
-
-// quicAddrValidator is a helper struct that holds a small LRU cache of
-// addresses for which we do not require address validation.
-type quicAddrValidator struct {
-	cache gcache.Cache
-	ttl   time.Duration
-}
-
-// newQUICAddrValidator initializes a new instance of *quicAddrValidator.
-func newQUICAddrValidator(cacheSize int, ttl time.Duration) (v *quicAddrValidator) {
-	return &quicAddrValidator{
-		cache: gcache.New(cacheSize).LRU().Build(),
-		ttl:   ttl,
-	}
-}
-
-// requiresValidation determines if a QUIC Retry packet should be sent by the
-// client. This allows the server to verify the client's address but increases
-// the latency.
-func (v *quicAddrValidator) requiresValidation(addr net.Addr) (ok bool) {
-	// addr must be *net.UDPAddr here and if it's not we don't mind panic.
-	key := addr.(*net.UDPAddr).IP.String()
-	if v.cache.Has(key) {
-		return false
-	}
-
-	err := v.cache.SetWithExpire(key, true, v.ttl)
-	if err != nil {
-		// Shouldn't happen, since we don't set a serialization function.
-		panic(fmt.Errorf("quic validator: setting cache item: %w", err))
-	}
-
-	// Address not found in the cache so return true to make sure the server
-	// will require address validation.
-	return true
 }
 
 // readAll reads from r until an error or io.EOF into the specified buffer buf.

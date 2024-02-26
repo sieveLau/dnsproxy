@@ -279,10 +279,6 @@ func startDoQServer(t *testing.T, tlsConf *tls.Config, port int) (s *testDoQServ
 		fmt.Sprintf("127.0.0.1:%d", port),
 		tlsConf,
 		&quic.Config{
-			// Necessary for 0-RTT.
-			RequireAddressValidation: func(net.Addr) (ok bool) {
-				return false
-			},
 			Allow0RTT: true,
 		},
 	)

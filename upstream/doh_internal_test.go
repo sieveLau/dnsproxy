@@ -430,9 +430,6 @@ func startDoHServer(
 
 		// QUIC configuration with the 0-RTT support enabled by default.
 		quicConfig := &quic.Config{
-			RequireAddressValidation: func(net.Addr) (ok bool) {
-				return true
-			},
 			Allow0RTT: true,
 		}
 		listenerH3, err = quic.ListenAddrEarly(udpAddr.String(), tlsConfigH3, quicConfig)
