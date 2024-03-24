@@ -379,7 +379,7 @@ func (p *dnsOverQUIC) closeConnWithError(conn quic.Connection, err error) {
 		log.Error("dnsproxy: failed to close the conn: %v", err)
 	}
 
-	// If the connection that's being closed it cached, reset the cache.
+	// If the connection that's being closed is cached, reset the cache.
 	if p.conn == conn {
 		p.conn = nil
 	}
