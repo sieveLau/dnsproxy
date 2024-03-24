@@ -54,7 +54,7 @@ func TestUpstreamDoQ(t *testing.T) {
 		if conn == nil {
 			conn = uq.conn
 		} else {
-			// This way we test that the conn is properly reused.
+			// This way we test that the connection is properly reused.
 			require.Equal(t, conn, uq.conn)
 		}
 	}
@@ -110,6 +110,8 @@ func TestUpstreamDoQ_serverCloseConn(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		go func() {
+			t.Helper()
+
 			defer wg.Done()
 
 			req := createTestMessage()
@@ -230,14 +232,14 @@ type testDoQServer struct {
 	// listener is the QUIC connections listener.
 	listener *quic.EarlyListener
 
-	// addr is the address that this server listens to.
-	addr string
-
 	// conns is the list of connections that are currently active.
 	conns map[quic.EarlyConnection]struct{}
 
 	// connsMu protects conns.
 	connsMu *sync.Mutex
+
+	// addr is the address that this server listens to.
+	addr string
 }
 
 // Shutdown stops the test server.
