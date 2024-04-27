@@ -265,9 +265,7 @@ func (p *dnsOverQUIC) getBytesPool() (pool *sync.Pool) {
 
 // getConnection opens or returns an existing quic.Connection and indicates
 // whether it opened a new connection or used an existing cached one.
-func (p *dnsOverQUIC) getConnection() (c quic.Connection, cached bool, err error) {
-	var conn quic.Connection
-
+func (p *dnsOverQUIC) getConnection() (conn quic.Connection, cached bool, err error) {
 	p.connMu.Lock()
 	defer p.connMu.Unlock()
 
