@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/AdguardTeam/dnsproxy/upstream"
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/AdguardTeam/golibs/netutil"
@@ -26,18 +27,22 @@ const (
 	UModeFastestAddr
 )
 
-// BeforeRequestHandler is an optional custom handler called before DNS requests
-// If it returns false, the request won't be processed at all
-type BeforeRequestHandler func(p *Proxy, dctx *DNSContext) (bool, error)
+// RequestHandler is an optional custom handler for DNS requests.  It's used
+// instead of [Proxy.Resolve] if set.  The resulting error doesn't affect the
+// request processing.  The custom handler is responsible for calling
+// [ResponseHandler], if it doesn't call [Proxy.Resolve].
+//
+// TODO(e.burkov):  Use the same interface-based approach as
+// [BeforeRequestHandler].
+type RequestHandler func(p *Proxy, dctx *DNSContext) (err error)
 
-// RequestHandler is an optional custom handler for DNS requests
-// It is called instead of the default method (Proxy.Resolve())
-// See handler_test.go for examples
-type RequestHandler func(p *Proxy, dctx *DNSContext) error
-
-// ResponseHandler is a callback method that is called when DNS query has been processed
-// d -- current DNS query context (contains response if it was successful)
-// err -- error (if any)
+// ResponseHandler is an optional custom handler called when DNS query has been
+// processed.  When called from [Proxy.Resolve], dctx will contain the response
+// message if the upstream or cache succeeded.  err is only not nil if the
+// upstream failed to respond.
+//
+// TODO(e.burkov):  Use the same interface-based approach as
+// [BeforeRequestHandler].
 type ResponseHandler func(dctx *DNSContext, err error)
 
 // Config contains all the fields necessary for proxy configuration
@@ -49,8 +54,18 @@ type Config struct {
 	// value of nil makes Proxy not trust any address.
 	TrustedProxies netutil.SubnetSet
 
+	// PrivateSubnets is the set of private networks.  Client having an address
+	// within this set is able to resolve PTR requests for addresses within this
+	// set.
+	PrivateSubnets netutil.SubnetSet
+
+	// MessageConstructor used to build DNS messages.  If nil, the default
+	// constructor will be used.
+	MessageConstructor MessageConstructor
+
 	// BeforeRequestHandler is an optional custom handler called before each DNS
-	// request is started processing.  See [BeforeRequestHandler].
+	// request is started processing, see [BeforeRequestHandler].  The default
+	// no-op implementation is used, if it's nil.
 	BeforeRequestHandler BeforeRequestHandler
 
 	// RequestHandler is an optional custom handler for DNS requests.  It's used
@@ -219,7 +234,14 @@ type Config struct {
 	// answers into IPv6 answers using first of DNS64Prefs.  Note also that PTR
 	// requests for addresses within the specified networks are considered
 	// private and will be forwarded as PrivateRDNSUpstreamConfig specifies.
+	// Those will be responded with NXDOMAIN if UsePrivateRDNS is false.
 	UseDNS64 bool
+
+	// UsePrivateRDNS defines if the PTR requests for private IP addresses
+	// should be resolved via PrivateRDNSUpstreamConfig.  Note that it requires
+	// a valid PrivateRDNSUpstreamConfig with at least a single general upstream
+	// server.
+	UsePrivateRDNS bool
 
 	// PreferIPv6 tells the proxy to prefer IPv6 addresses when bootstrapping
 	// upstreams that use hostnames.
@@ -234,16 +256,17 @@ func (p *Proxy) validateConfig() (err error) {
 		return fmt.Errorf("validating general upstreams: %w", err)
 	}
 
-	// Allow both [Proxy.PrivateRDNSUpstreamConfig] and [Proxy.Fallbacks] to be
-	// nil, but not empty.  nil means using the default values for those.
-
-	err = p.PrivateRDNSUpstreamConfig.validate()
-	if err != nil && !errors.Is(err, errNoDefaultUpstreams) {
-		return fmt.Errorf("validating private RDNS upstreams: %w", err)
+	err = ValidatePrivateConfig(p.PrivateRDNSUpstreamConfig, p.privateNets)
+	if err != nil {
+		if p.UsePrivateRDNS || errors.Is(err, upstream.ErrNoUpstreams) {
+			return fmt.Errorf("validating private RDNS upstreams: %w", err)
+		}
 	}
 
+	// Allow [Proxy.Fallbacks] to be nil, but not empty.  nil means not to use
+	// fallbacks at all.
 	err = p.Fallbacks.validate()
-	if err != nil && !errors.Is(err, errNoDefaultUpstreams) {
+	if errors.Is(err, upstream.ErrNoUpstreams) {
 		return fmt.Errorf("validating fallbacks: %w", err)
 	}
 
@@ -306,7 +329,7 @@ func (p *Proxy) logConfigInfo() {
 	}
 
 	if p.RefuseAny {
-		log.Info("The server is configured to refuse ANY requests")
+		log.Info("dnsproxy: server will refuse requests of type ANY")
 	}
 
 	if len(p.BogusNXDomain) > 0 {

@@ -93,13 +93,13 @@ func startTestDNSCryptServer(
 
 func TestUpstreamDNSCrypt(t *testing.T) {
 	// AdGuard DNS (DNSCrypt)
-	address := "sdns://AQIAAAAAAAAAFDE3Ni4xMDMuMTMwLjEzMDo1NDQzINErR_JS3PLCu_iZEIbq95zkSV2LFsigxDIuUso_OQhzIjIuZG5zY3J5cHQuZGVmYXVsdC5uczEuYWRndWFyZC5jb20"
+	address := "sdns://AQMAAAAAAAAAETk0LjE0MC4xNC4xNDo1NDQzINErR_JS3PLCu_iZEIbq95zkSV2LFsigxDIuUso_OQhzIjIuZG5zY3J5cHQuZGVmYXVsdC5uczEuYWRndWFyZC5jb20"
 	u, err := AddressToUpstream(address, &Options{Timeout: dialTimeout})
 	require.NoError(t, err)
 	testutil.CleanupAndRequireSuccess(t, u.Close)
 
 	// Test that it responds properly
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		checkUpstream(t, u, address)
 	}
 }
@@ -129,7 +129,7 @@ func TestDNSCrypt_Exchange_truncated(t *testing.T) {
 		res.Answer = append(res.Answer, answer)
 
 		veryLongString := strings.Repeat("VERY LONG STRING", 7)
-		for i := 0; i < 50; i++ {
+		for range 50 {
 			answer.Txt = append(answer.Txt, veryLongString)
 		}
 

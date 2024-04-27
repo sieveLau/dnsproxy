@@ -8,6 +8,7 @@ import (
 
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/log"
+	"github.com/AdguardTeam/golibs/netutil"
 	"github.com/miekg/dns"
 	"github.com/quic-go/quic-go"
 )
@@ -79,28 +80,11 @@ func (p *Proxy) startListeners(ctx context.Context) error {
 	return nil
 }
 
-// handleBefore calls the [BeforeRequestHandler] if it's set and returns true if
-// the request should be processed further.
-func (p *Proxy) handleBefore(d *DNSContext) (cont bool) {
-	if p.BeforeRequestHandler == nil {
-		return true
-	}
-
-	ok, err := p.BeforeRequestHandler(p, d)
-	if err != nil {
-		log.Error("dnsproxy: handling before request: %s", err)
-
-		d.Res = p.genServerFailure(d.Req)
-		p.respond(d)
-
-		return false
-	}
-
-	return ok
-}
-
-// handleDNSRequest processes the incoming packet bytes and returns with an optional response packet.
-func (p *Proxy) handleDNSRequest(d *DNSContext) error {
+// handleDNSRequest processes the context.  The only error it returns is the one
+// from the [RequestHandler], or [Resolve] if the [RequestHandler] is not set.
+// d is left without a response as the documentation to [BeforeRequestHandler]
+// says, and if it's ratelimited.
+func (p *Proxy) handleDNSRequest(d *DNSContext) (err error) {
 	p.logDNSMessage(d.Req)
 
 	if d.Req.Response {
@@ -108,6 +92,9 @@ func (p *Proxy) handleDNSRequest(d *DNSContext) error {
 
 		return nil
 	}
+
+	ip := d.Addr.Addr()
+	d.IsPrivateClient = p.privateNets.Contains(ip)
 
 	if !p.handleBefore(d) {
 		return nil
@@ -117,29 +104,19 @@ func (p *Proxy) handleDNSRequest(d *DNSContext) error {
 	//
 	// TODO(e.burkov):  Investigate if written above true and move to UDP server
 	// implementation?
-	if d.Proto == ProtoUDP && p.isRatelimited(d.Addr.Addr()) {
+	if d.Proto == ProtoUDP && p.isRatelimited(ip) {
 		log.Debug("dnsproxy: ratelimiting %s based on IP only", d.Addr)
 
-		return nil // do nothing, don't reply, we got ratelimited
+		// Don't reply to ratelimitted clients.
+		return nil
 	}
 
 	d.Res = p.validateRequest(d)
-
-	var err error
-
 	if d.Res == nil {
-		if len(p.UpstreamConfig.Upstreams) == 0 {
-			panic("SHOULD NOT HAPPEN: no default upstreams specified")
-		}
-
-		defer func() { err = errors.Annotate(err, "handling request: %w") }()
-
-		// execute the DNS request
-		// if there is a custom middleware configured, use it
 		if p.RequestHandler != nil {
-			err = p.RequestHandler(p, d)
+			err = errors.Annotate(p.RequestHandler(p, d), "using request handler: %w")
 		} else {
-			err = p.Resolve(d)
+			err = errors.Annotate(p.Resolve(d), "using default request handler: %w")
 		}
 	}
 
@@ -156,15 +133,57 @@ func (p *Proxy) validateRequest(d *DNSContext) (resp *dns.Msg) {
 	case len(d.Req.Question) != 1:
 		log.Debug("dnsproxy: got invalid number of questions: %d", len(d.Req.Question))
 
-		return p.genServerFailure(d.Req)
+		// TODO(e.burkov):  Probably, FORMERR would be a better choice here.
+		// Check out RFC.
+		return p.messages.NewMsgSERVFAIL(d.Req)
 	case p.RefuseAny && d.Req.Question[0].Qtype == dns.TypeANY:
 		// Refuse requests of type ANY (anti-DDOS measure).
 		log.Debug("dnsproxy: refusing type=ANY request")
 
-		return p.genNotImpl(d.Req)
+		return p.messages.NewMsgNOTIMPLEMENTED(d.Req)
+	case p.recDetector.check(d.Req):
+		log.Debug("dnsproxy: recursion detected resolving %q", d.Req.Question[0].Name)
+
+		return p.messages.NewMsgNXDOMAIN(d.Req)
+	case d.isForbiddenARPA(p.privateNets):
+		log.Debug("dnsproxy: %s requests a private arpa domain %q", d.Addr, d.Req.Question[0].Name)
+
+		return p.messages.NewMsgNXDOMAIN(d.Req)
 	default:
 		return nil
 	}
+}
+
+// isForbiddenARPA returns true if dctx contains a PTR, SOA, or NS request for
+// some private address and client's address is not within the private network.
+// Otherwise, it sets [DNSContext.RequestedPrivateRDNS] for future use.
+func (dctx *DNSContext) isForbiddenARPA(privateNets netutil.SubnetSet) (ok bool) {
+	q := dctx.Req.Question[0]
+	switch q.Qtype {
+	case dns.TypePTR, dns.TypeSOA, dns.TypeNS:
+		// Go on.
+		//
+		// TODO(e.burkov):  Reconsider the list of types involved to private
+		// address space.  Perhaps, use the logic for any type.  See
+		// https://www.rfc-editor.org/rfc/rfc6761.html#section-6.1.
+	default:
+		return false
+	}
+
+	requestedPref, err := netutil.ExtractReversedAddr(q.Name)
+	if err != nil {
+		log.Debug("proxy: parsing reversed subnet: %v", err)
+
+		return false
+	}
+
+	if privateNets.Contains(requestedPref.Addr()) {
+		dctx.RequestedPrivateRDNS = requestedPref
+
+		return !dctx.IsPrivateClient
+	}
+
+	return false
 }
 
 // respond writes the specified response to the client (or does nothing if d.Res is empty)
@@ -209,27 +228,6 @@ func (p *Proxy) setMinMaxTTL(r *dns.Msg) {
 			rr.Header().Ttl = newTTL
 		}
 	}
-}
-
-func (p *Proxy) genServerFailure(request *dns.Msg) *dns.Msg {
-	return p.genWithRCode(request, dns.RcodeServerFailure)
-}
-
-func (p *Proxy) genNotImpl(request *dns.Msg) (resp *dns.Msg) {
-	resp = p.genWithRCode(request, dns.RcodeNotImplemented)
-	// NOTIMPL without EDNS is treated as 'we don't support EDNS', so
-	// explicitly set it.
-	resp.SetEdns0(1452, false)
-
-	return resp
-}
-
-func (p *Proxy) genWithRCode(req *dns.Msg, code int) (resp *dns.Msg) {
-	resp = &dns.Msg{}
-	resp.SetRcode(req, code)
-	resp.RecursionAvailable = true
-
-	return resp
 }
 
 func (p *Proxy) logDNSMessage(m *dns.Msg) {

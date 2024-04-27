@@ -9,6 +9,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/AdguardTeam/dnsproxy/internal/bootstrap"
 	"github.com/AdguardTeam/dnsproxy/proxyutil"
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/log"
@@ -63,11 +64,24 @@ const (
 // createQUICListeners creates QUIC listeners for the DoQ server.
 func (p *Proxy) createQUICListeners() error {
 	for _, a := range p.QUICListenAddr {
-		log.Info("Creating a QUIC listener")
+		log.Info("creating listener quic://%s", a)
+
+		conn, err := net.ListenUDP(bootstrap.NetworkUDP, a)
+		if err != nil {
+			return fmt.Errorf("listening to %s: %w", a, err)
+		}
+
+		p.quicConns = append(p.quicConns, conn)
+
+		v := newQUICAddrValidator(quicAddrValidatorCacheSize, quicAddrValidatorCacheTTL)
+		transport := &quic.Transport{
+			Conn:                conn,
+			VerifySourceAddress: v.requiresValidation,
+		}
+
 		tlsConfig := p.TLSConfig.Clone()
 		tlsConfig.NextProtos = compatProtoDQ
-		quicListen, err := quic.ListenAddrEarly(
-			a.String(),
+		quicListen, err := transport.ListenEarly(
 			tlsConfig,
 			newServerQUICConfig(),
 		)
@@ -75,8 +89,10 @@ func (p *Proxy) createQUICListeners() error {
 			return fmt.Errorf("quic listener: %w", err)
 		}
 
+		p.quicTransports = append(p.quicTransports, transport)
 		p.quicListen = append(p.quicListen, quicListen)
-		log.Info("Listening to quic://%s", quicListen.Addr())
+
+		log.Info("listening quic://%s", quicListen.Addr())
 	}
 	return nil
 }
@@ -393,13 +409,10 @@ func closeQUICConn(conn quic.Connection, code quic.ApplicationErrorCode) {
 // newServerQUICConfig creates *quic.Config populated with the default settings.
 // This function is supposed to be used for both DoQ and DoH3 server.
 func newServerQUICConfig() (conf *quic.Config) {
-	v := newQUICAddrValidator(quicAddrValidatorCacheSize, quicAddrValidatorCacheTTL)
-
 	return &quic.Config{
-		MaxIdleTimeout:           maxQUICIdleTimeout,
-		MaxIncomingStreams:       math.MaxUint16,
-		MaxIncomingUniStreams:    math.MaxUint16,
-		RequireAddressValidation: v.requiresValidation,
+		MaxIdleTimeout:        maxQUICIdleTimeout,
+		MaxIncomingStreams:    math.MaxUint16,
+		MaxIncomingUniStreams: math.MaxUint16,
 		// Enable 0-RTT by default for all connections on the server-side.
 		Allow0RTT: true,
 	}

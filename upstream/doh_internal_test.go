@@ -8,7 +8,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"strconv"
+	"net/netip"
+	"net/url"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -64,7 +65,6 @@ func TestUpstreamDoH(t *testing.T) {
 				delayHandshakeH2: tc.delayHandshakeH2,
 				delayHandshakeH3: tc.delayHandshakeH3,
 			})
-			t.Cleanup(srv.Shutdown)
 
 			// Create a DNS-over-HTTPS upstream.
 			address := fmt.Sprintf("https://%s/dns-query", srv.addr)
@@ -90,7 +90,7 @@ func TestUpstreamDoH(t *testing.T) {
 			testutil.CleanupAndRequireSuccess(t, u.Close)
 
 			// Test that it responds properly.
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				checkUpstream(t, u, address)
 			}
 
@@ -174,7 +174,6 @@ func TestUpstreamDoH_raceReconnect(t *testing.T) {
 				delayHandshakeH3: tc.delayHandshakeH3,
 				handler:          mux,
 			})
-			t.Cleanup(srv.Shutdown)
 
 			// Create a DNS-over-HTTPS upstream that will be used for the
 			// race test.
@@ -197,74 +196,66 @@ func TestUpstreamDoH_serverRestart(t *testing.T) {
 	testCases := []struct {
 		name         string
 		httpVersions []HTTPVersion
-	}{
-		{
-			name:         "http2",
-			httpVersions: []HTTPVersion{HTTPVersion11, HTTPVersion2},
-		},
-		{
-			name:         "http3",
-			httpVersions: []HTTPVersion{HTTPVersion3},
-		},
-	}
+	}{{
+		name:         "http2",
+		httpVersions: []HTTPVersion{HTTPVersion11, HTTPVersion2},
+	}, {
+		name:         "http3",
+		httpVersions: []HTTPVersion{HTTPVersion3},
+	}}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Run the first server instance.
-			srv := startDoHServer(t, testDoHServerOptions{
-				http3Enabled: true,
-			})
+			var addr netip.AddrPort
+			var upsAddr string
+			var u Upstream
 
-			// Create a DNS-over-HTTPS upstream.
-			address := fmt.Sprintf("https://%s/dns-query", srv.addr)
-			u, err := AddressToUpstream(
-				address,
-				&Options{
+			t.Run("first_try", func(t *testing.T) {
+				srv := startDoHServer(t, testDoHServerOptions{
+					http3Enabled: true,
+				})
+
+				addr = netip.MustParseAddrPort(srv.addr)
+				upsAddr = (&url.URL{
+					Scheme: "https",
+					Host:   addr.String(),
+					Path:   "dns-query",
+				}).String()
+
+				var err error
+				u, err = AddressToUpstream(upsAddr, &Options{
 					InsecureSkipVerify: true,
 					HTTPVersions:       tc.httpVersions,
 					Timeout:            time.Second,
-				},
-			)
-			require.NoError(t, err)
+				})
+				require.NoError(t, err)
+
+				checkUpstream(t, u, upsAddr)
+			})
+			require.False(t, t.Failed())
 			testutil.CleanupAndRequireSuccess(t, u.Close)
 
-			// Test that the upstream works properly.
-			checkUpstream(t, u, address)
+			t.Run("second_try", func(t *testing.T) {
+				_ = startDoHServer(t, testDoHServerOptions{
+					http3Enabled: true,
+					port:         int(addr.Port()),
+				})
 
-			// Now let's restart the server on the same address.
-			_, portStr, err := net.SplitHostPort(srv.addr)
-			require.NoError(t, err)
-			port, err := strconv.Atoi(portStr)
-			require.NoError(t, err)
-
-			// Shutdown the first server.
-			srv.Shutdown()
-
-			// Start the new one on the same port.
-			srv = startDoHServer(t, testDoHServerOptions{
-				http3Enabled: true,
-				port:         port,
+				checkUpstream(t, u, upsAddr)
 			})
+			require.False(t, t.Failed())
 
-			// Check that everything works after restart.
-			checkUpstream(t, u, address)
+			t.Run("retry", func(t *testing.T) {
+				_, err := u.Exchange(createTestMessage())
+				require.Error(t, err)
 
-			// Stop the server again.
-			srv.Shutdown()
+				_ = startDoHServer(t, testDoHServerOptions{
+					http3Enabled: true,
+					port:         int(addr.Port()),
+				})
 
-			// Now try to send a message and make sure that it returns an error.
-			_, err = u.Exchange(createTestMessage())
-			require.Error(t, err)
-
-			// Start the server one more time.
-			srv = startDoHServer(t, testDoHServerOptions{
-				http3Enabled: true,
-				port:         port,
+				checkUpstream(t, u, upsAddr)
 			})
-			defer srv.Shutdown()
-
-			// Check that everything works after the second restart.
-			checkUpstream(t, u, address)
 		})
 	}
 }
@@ -274,7 +265,6 @@ func TestUpstreamDoH_0RTT(t *testing.T) {
 	srv := startDoHServer(t, testDoHServerOptions{
 		http3Enabled: true,
 	})
-	t.Cleanup(srv.Shutdown)
 
 	// Create a DNS-over-HTTPS upstream.
 	tracer := &quicTracer{}
@@ -323,11 +313,21 @@ func TestUpstreamDoH_0RTT(t *testing.T) {
 
 // testDoHServerOptions allows customizing testDoHServer behavior.
 type testDoHServerOptions struct {
-	handler          http.Handler
+	// handler is an HTTP handler that should be used by the server.  The
+	// default one is used on nil.
+	handler http.Handler
+	// delayHandshakeH2 is a delay that should be added to the handshake of the
+	// HTTP/2 server.
 	delayHandshakeH2 time.Duration
+	// delayHandshakeH3 is a delay that should be added to the handshake of the
+	// HTTP/3 server.
 	delayHandshakeH3 time.Duration
-	port             int
-	http3Enabled     bool
+	// port is the port that the server should listen to.  If it's 0, a random
+	// port is used.
+	port int
+	// http3Enabled is a flag that indicates whether the server should start an
+	// HTTP/3 server.
+	http3Enabled bool
 }
 
 // testDoHServer is an instance of a test DNS-over-HTTPS server.
@@ -363,9 +363,9 @@ func (s *testDoHServer) Shutdown() {
 	}
 }
 
-// startDoHServer starts a new DNS-over-HTTPS server on a random port and
-// returns the instance of this server.  Depending on whether http3Enabled is
-// set to true or false it will or will not initialize a HTTP/3 server.
+// startDoHServer starts a new DNS-over-HTTPS server with specified options.  It
+// returns a started server instance with addr set.  Note that it adds its own
+// shutdown to cleanup of t.
 func startDoHServer(
 	t *testing.T,
 	opts testDoHServerOptions,
@@ -429,18 +429,26 @@ func startDoHServer(
 
 		// Listen UDP for the H3 server. Reuse the same port as was used for the
 		// TCP listener.
-		udpAddr, uErr := net.ResolveUDPAddr("udp", fmt.Sprintf("127.0.0.1:%d", tcpAddr.Port))
-		require.NoError(t, uErr)
+		var udpAddr *net.UDPAddr
+		udpAddr, err = net.ResolveUDPAddr("udp", fmt.Sprintf("127.0.0.1:%d", tcpAddr.Port))
+		require.NoError(t, err)
+
+		var conn net.PacketConn
+		conn, err = net.ListenUDP("udp", udpAddr)
+		require.NoError(t, err)
+		testutil.CleanupAndRequireSuccess(t, conn.Close)
+
+		transport := &quic.Transport{
+			Conn:                conn,
+			VerifySourceAddress: func(net.Addr) bool { return false },
+		}
 
 		// QUIC configuration with the 0-RTT support enabled by default.
-		quicConfig := &quic.Config{
-			RequireAddressValidation: func(net.Addr) (ok bool) {
-				return true
-			},
+		listenerH3, err = transport.ListenEarly(tlsConfigH3, &quic.Config{
 			Allow0RTT: true,
-		}
-		listenerH3, err = quic.ListenAddrEarly(udpAddr.String(), tlsConfigH3, quicConfig)
+		})
 		require.NoError(t, err)
+		testutil.CleanupAndRequireSuccess(t, transport.Close)
 
 		// Run the H3 server.
 		go func() {
@@ -449,7 +457,7 @@ func startDoHServer(
 		}()
 	}
 
-	return &testDoHServer{
+	s = &testDoHServer{
 		tlsConfig:  tlsConfig,
 		rootCAs:    rootCAs,
 		server:     server,
@@ -458,6 +466,9 @@ func startDoHServer(
 		// Save the address that the server listens to.
 		addr: tcpAddr.String(),
 	}
+	t.Cleanup(s.Shutdown)
+
+	return s
 }
 
 // createDoHHandlerFunc creates a simple http.HandlerFunc that reads the

@@ -57,7 +57,7 @@ func TestUpstream_bootstrapTimeout(t *testing.T) {
 
 	ch := make(chan int, count)
 	abort := make(chan string, 1)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		go func(idx int) {
 			t.Logf("Start %d", idx)
 			req := createTestMessage()
@@ -86,7 +86,7 @@ func TestUpstream_bootstrapTimeout(t *testing.T) {
 		}(i)
 	}
 
-	for i := 0; i < count; i++ {
+	for range count {
 		select {
 		case res := <-ch:
 			t.Logf("Got result from %d", res)
@@ -159,11 +159,11 @@ func TestUpstreams(t *testing.T) {
 	}, {
 		// AdGuard DNS (DNSCrypt)
 		bootstrap: nil,
-		address:   "sdns://AQIAAAAAAAAAFDE3Ni4xMDMuMTMwLjEzMDo1NDQzINErR_JS3PLCu_iZEIbq95zkSV2LFsigxDIuUso_OQhzIjIuZG5zY3J5cHQuZGVmYXVsdC5uczEuYWRndWFyZC5jb20",
+		address:   "sdns://AQMAAAAAAAAAETk0LjE0MC4xNC4xNDo1NDQzINErR_JS3PLCu_iZEIbq95zkSV2LFsigxDIuUso_OQhzIjIuZG5zY3J5cHQuZGVmYXVsdC5uczEuYWRndWFyZC5jb20",
 	}, {
 		// AdGuard Family (DNSCrypt)
 		bootstrap: googleBoot,
-		address:   "sdns://AQIAAAAAAAAAFDE3Ni4xMDMuMTMwLjEzMjo1NDQzILgxXdexS27jIKRw3C7Wsao5jMnlhvhdRUXWuMm1AFq6ITIuZG5zY3J5cHQuZmFtaWx5Lm5zMS5hZGd1YXJkLmNvbQ",
+		address:   "sdns://AQMAAAAAAAAAETk0LjE0MC4xNC4xNTo1NDQzILgxXdexS27jIKRw3C7Wsao5jMnlhvhdRUXWuMm1AFq6ITIuZG5zY3J5cHQuZmFtaWx5Lm5zMS5hZGd1YXJkLmNvbQ",
 	}, {
 		// Cloudflare DNS (DNS-over-HTTPS)
 		bootstrap: googleBoot,
@@ -577,7 +577,7 @@ func checkRaceCondition(u Upstream) {
 
 	makeRequests := func() {
 		defer wg.Done()
-		for i := 0; i < reqCount; i++ {
+		for range reqCount {
 			req := createTestMessage()
 			// Ignore exchange errors here, the point is to check for races.
 			_, _ = u.Exchange(req)
@@ -585,7 +585,7 @@ func checkRaceCondition(u Upstream) {
 	}
 
 	wg.Add(goroutinesCount)
-	for i := 0; i < goroutinesCount; i++ {
+	for range goroutinesCount {
 		go makeRequests()
 	}
 
