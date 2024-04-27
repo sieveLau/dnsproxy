@@ -95,7 +95,8 @@ func TestUpstream_Exchange_quicServerCloseConn(t *testing.T) {
 	checkUpstream(t, u, address)
 
 	// Close all active connections.
-	srv.closeConns()
+	err = srv.closeConns()
+	require.NoError(t, err)
 
 	// Now run several queries in parallel to check that the error from the
 	// following issue is not happening:
@@ -115,9 +116,9 @@ func TestUpstream_Exchange_quicServerCloseConn(t *testing.T) {
 			defer wg.Done()
 
 			req := createTestMessage()
-			_, uErr := u.Exchange(req)
+			_, errExch := u.Exchange(req)
 
-			assert.NoError(t, uErr)
+			assert.NoError(t, errExch)
 		}(pt)
 	}
 
@@ -234,9 +235,10 @@ type testDoQServer struct {
 
 // Shutdown stops the test server.
 func (s *testDoQServer) Shutdown() (err error) {
-	s.closeConns()
+	errConns := s.closeConns()
+	errListener := s.listener.Close()
 
-	return s.listener.Close()
+	return errors.Join(errConns, errListener)
 }
 
 // Serve serves DoQ requests.
@@ -340,18 +342,22 @@ func (s *testDoQServer) closeConn(conn quic.EarlyConnection) {
 }
 
 // closeConns closes all active connections.
-func (s *testDoQServer) closeConns() {
+func (s *testDoQServer) closeConns() (err error) {
 	s.connsMu.Lock()
 	defer s.connsMu.Unlock()
 
+	var errs []error
+
 	for conn := range s.conns {
-		err := conn.CloseWithError(QUICCodeNoError, "")
-		if err != nil {
-			log.Debug("failed to close conn: %v", err)
+		errConn := conn.CloseWithError(QUICCodeNoError, "")
+		if errConn != nil {
+			errs = append(errs, errConn)
 		}
 
 		delete(s.conns, conn)
 	}
+
+	return errors.Join(errs...)
 }
 
 // startDoQServer starts a test DoQ server.
