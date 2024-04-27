@@ -28,7 +28,6 @@ func TestUpstreamDoQ(t *testing.T) {
 	tlsConf, rootCAs := createServerTLSConfig(t, "127.0.0.1")
 
 	srv := startDoQServer(t, tlsConf, 0)
-	testutil.CleanupAndRequireSuccess(t, srv.Shutdown)
 
 	address := fmt.Sprintf("quic://%s", srv.addr)
 	var lastState tls.ConnectionState
@@ -38,8 +37,7 @@ func TestUpstreamDoQ(t *testing.T) {
 
 			return nil
 		},
-		RootCAs:            rootCAs,
-		InsecureSkipVerify: true,
+		RootCAs: rootCAs,
 	}
 	u, err := AddressToUpstream(address, opts)
 	require.NoError(t, err)
@@ -78,7 +76,7 @@ func TestUpstreamDoQ(t *testing.T) {
 	checkRaceCondition(u)
 }
 
-func TestUpstreamDoQ_serverCloseConn(t *testing.T) {
+func TestUpstream_Exchange_quicServerCloseConn(t *testing.T) {
 	// Use the same tlsConf for all servers to preserve the data necessary for
 	// 0-RTT connections.
 	tlsConf, rootCAs := createServerTLSConfig(t, "127.0.0.1")
@@ -88,11 +86,7 @@ func TestUpstreamDoQ_serverCloseConn(t *testing.T) {
 
 	// Create a DNS-over-QUIC upstream.
 	address := fmt.Sprintf("quic://%s", srv.addr)
-	u, err := AddressToUpstream(address, &Options{
-		InsecureSkipVerify: true,
-		Timeout:            250 * time.Millisecond,
-		RootCAs:            rootCAs,
-	})
+	u, err := AddressToUpstream(address, &Options{RootCAs: rootCAs})
 
 	require.NoError(t, err)
 	testutil.CleanupAndRequireSuccess(t, u.Close)
@@ -103,23 +97,28 @@ func TestUpstreamDoQ_serverCloseConn(t *testing.T) {
 	// Close all active connections.
 	srv.closeConns()
 
-	// Now run several queries in parallel to trigger the error from
+	// Now run several queries in parallel to check that the error from the
+	// following issue is not happening:
 	// https://github.com/AdguardTeam/dnsproxy/issues/389.
+	//
+	// Run 10 queries in parallel as the initial testing showed that this is
+	// enough to trigger the race issue.
+	const parallelQueries = 10
 
 	wg := sync.WaitGroup{}
-	wg.Add(10)
+	wg.Add(parallelQueries)
 
 	for i := 0; i < 10; i++ {
-		go func() {
-			t.Helper()
+		pt := testutil.PanicT{}
 
+		go func(t assert.TestingT) {
 			defer wg.Done()
 
 			req := createTestMessage()
 			_, uErr := u.Exchange(req)
 
 			assert.NoError(t, uErr)
-		}()
+		}(pt)
 	}
 
 	wg.Wait()
@@ -144,11 +143,7 @@ func TestUpstreamDoQ_serverRestart(t *testing.T) {
 		}).String()
 
 		var err error
-		u, err = AddressToUpstream(upsStr, &Options{
-			InsecureSkipVerify: true,
-			Timeout:            250 * time.Millisecond,
-			RootCAs:            rootCAs,
-		})
+		u, err = AddressToUpstream(upsStr, &Options{RootCAs: rootCAs})
 		require.NoError(t, err)
 
 		checkUpstream(t, u, upsStr)
@@ -177,14 +172,12 @@ func TestUpstreamDoQ_0RTT(t *testing.T) {
 	tlsConf, rootCAs := createServerTLSConfig(t, "127.0.0.1")
 
 	srv := startDoQServer(t, tlsConf, 0)
-	testutil.CleanupAndRequireSuccess(t, srv.Shutdown)
 
 	tracer := &quicTracer{}
 	address := fmt.Sprintf("quic://%s", srv.addr)
 	u, err := AddressToUpstream(address, &Options{
-		InsecureSkipVerify: true,
-		QUICTracer:         tracer.TracerForConnection,
-		RootCAs:            rootCAs,
+		QUICTracer: tracer.TracerForConnection,
+		RootCAs:    rootCAs,
 	})
 	require.NoError(t, err)
 	testutil.CleanupAndRequireSuccess(t, u.Close)

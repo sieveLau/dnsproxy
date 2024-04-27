@@ -173,7 +173,7 @@ func (p *dnsOverQUIC) Exchange(m *dns.Msg) (resp *dns.Msg, err error) {
 		// attempt.
 		conn, _, err = p.getConnection()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("getting new conn: %w", err)
 		}
 
 		// Retry sending the request through the new connection.
