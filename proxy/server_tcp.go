@@ -9,10 +9,10 @@ import (
 	"net"
 	"time"
 
-	proxynetutil "github.com/AdguardTeam/dnsproxy/internal/netutil"
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/miekg/dns"
+	proxynetutil "github.com/sieveLau/dnsproxy/internal/netutil"
 )
 
 func (p *Proxy) createTCPListeners(ctx context.Context) (err error) {

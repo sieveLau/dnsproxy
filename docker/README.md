@@ -7,7 +7,7 @@ it can work as a `DNS-over-HTTPS`, `DNS-over-TLS` or `DNS-over-QUIC` server.
 Learn more about dnsproxy and its full capabilities in
 its [Github repo][dnsproxy].
 
-[dnsproxy]: https://github.com/AdguardTeam/dnsproxy
+[dnsproxy]: https://github.com/sieveLau/dnsproxy
 
 ## Quick start
 

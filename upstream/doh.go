@@ -13,12 +13,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AdguardTeam/dnsproxy/internal/bootstrap"
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/miekg/dns"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
+	"github.com/sieveLau/dnsproxy/internal/bootstrap"
 	"golang.org/x/net/http2"
 )
 
@@ -34,7 +34,7 @@ const (
 
 	// dohMaxConnsPerHost controls the maximum number of connections for
 	// each host.  Note, that setting it to 1 may cause issues with Go's http
-	// implementation, see https://github.com/AdguardTeam/dnsproxy/issues/278.
+	// implementation, see https://github.com/sieveLau/dnsproxy/issues/278.
 	dohMaxConnsPerHost = 2
 
 	// dohMaxIdleConns controls the maximum number of connections being idle
@@ -474,7 +474,7 @@ func (p *dnsOverHTTPS) createTransport() (t http.RoundTripper, err error) {
 
 	// Explicitly configure transport to use HTTP/2.
 	//
-	// See https://github.com/AdguardTeam/dnsproxy/issues/11.
+	// See https://github.com/sieveLau/dnsproxy/issues/11.
 	var transportH2 *http2.Transport
 	transportH2, err = http2.ConfigureTransports(transport)
 	if err != nil {

@@ -3,10 +3,10 @@ package proxy
 import (
 	"time"
 
-	"github.com/AdguardTeam/dnsproxy/upstream"
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/miekg/dns"
+	"github.com/sieveLau/dnsproxy/upstream"
 	"golang.org/x/exp/slices"
 )
 

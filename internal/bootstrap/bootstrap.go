@@ -10,10 +10,10 @@ import (
 	"net/url"
 	"time"
 
-	proxynetutil "github.com/AdguardTeam/dnsproxy/internal/netutil"
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/AdguardTeam/golibs/netutil"
+	proxynetutil "github.com/sieveLau/dnsproxy/internal/netutil"
 )
 
 // DialHandler is a dial function for creating unencrypted network connections

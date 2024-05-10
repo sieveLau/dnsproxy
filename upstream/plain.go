@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AdguardTeam/dnsproxy/internal/bootstrap"
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/miekg/dns"
+	"github.com/sieveLau/dnsproxy/internal/bootstrap"
 )
 
 // network is the semantic type alias of the network to pass to dialing

@@ -13,9 +13,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/AdguardTeam/dnsproxy/fastip"
-	proxynetutil "github.com/AdguardTeam/dnsproxy/internal/netutil"
-	"github.com/AdguardTeam/dnsproxy/upstream"
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/AdguardTeam/golibs/netutil"
@@ -24,6 +21,9 @@ import (
 	gocache "github.com/patrickmn/go-cache"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
+	"github.com/sieveLau/dnsproxy/fastip"
+	proxynetutil "github.com/sieveLau/dnsproxy/internal/netutil"
+	"github.com/sieveLau/dnsproxy/upstream"
 )
 
 const (
@@ -677,7 +677,7 @@ func (p *Proxy) cacheWorks(dctx *DNSContext) (ok bool) {
 	case p.cache == nil:
 		reason = "disabled"
 	case dctx.CustomUpstreamConfig != nil:
-		// See https://github.com/AdguardTeam/dnsproxy/issues/169.
+		// See https://github.com/sieveLau/dnsproxy/issues/169.
 		reason = "custom upstreams used"
 	case dctx.Req.CheckingDisabled:
 		reason = "dnssec check disabled"

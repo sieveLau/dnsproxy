@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/AdguardTeam/dnsproxy/internal/netutil"
+	"github.com/sieveLau/dnsproxy/internal/netutil"
 )
 
 func ExampleSortIPAddrs() {

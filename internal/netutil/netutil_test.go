@@ -4,7 +4,7 @@ import (
 	"net/netip"
 	"testing"
 
-	"github.com/AdguardTeam/dnsproxy/internal/netutil"
+	"github.com/sieveLau/dnsproxy/internal/netutil"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/slices"
 )

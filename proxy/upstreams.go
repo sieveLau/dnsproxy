@@ -5,11 +5,11 @@ import (
 	"io"
 	"strings"
 
-	"github.com/AdguardTeam/dnsproxy/upstream"
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/AdguardTeam/golibs/netutil"
 	"github.com/AdguardTeam/golibs/stringutil"
+	"github.com/sieveLau/dnsproxy/upstream"
 	"golang.org/x/exp/slices"
 )
 

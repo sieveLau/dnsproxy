@@ -13,12 +13,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AdguardTeam/dnsproxy/proxyutil"
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/AdguardTeam/golibs/testutil"
 	"github.com/miekg/dns"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/logging"
+	"github.com/sieveLau/dnsproxy/proxyutil"
 	"github.com/stretchr/testify/require"
 )
 

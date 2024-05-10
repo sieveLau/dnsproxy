@@ -6,10 +6,10 @@ import (
 	"io/fs"
 	"net/netip"
 
-	"github.com/AdguardTeam/dnsproxy/internal/netutil"
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/hostsfile"
 	"github.com/AdguardTeam/golibs/log"
+	"github.com/sieveLau/dnsproxy/internal/netutil"
 	"golang.org/x/exp/slices"
 )
 

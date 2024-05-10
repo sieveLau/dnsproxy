@@ -18,13 +18,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AdguardTeam/dnsproxy/upstream"
 	glcache "github.com/AdguardTeam/golibs/cache"
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/AdguardTeam/golibs/netutil"
 	"github.com/AdguardTeam/golibs/testutil"
 	"github.com/ameshkov/dnscrypt/v2"
 	"github.com/miekg/dns"
+	"github.com/sieveLau/dnsproxy/upstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

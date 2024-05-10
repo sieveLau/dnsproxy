@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"net/netip"
 
-	"github.com/AdguardTeam/dnsproxy/internal/bootstrap"
-	proxynetutil "github.com/AdguardTeam/dnsproxy/internal/netutil"
-	"github.com/AdguardTeam/dnsproxy/proxyutil"
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/miekg/dns"
+	"github.com/sieveLau/dnsproxy/internal/bootstrap"
+	proxynetutil "github.com/sieveLau/dnsproxy/internal/netutil"
+	"github.com/sieveLau/dnsproxy/proxyutil"
 )
 
 // Resolver is an alias for [bootstrap.Resolver] to avoid the import cycle.

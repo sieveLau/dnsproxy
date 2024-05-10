@@ -3,9 +3,9 @@ package proxy
 import (
 	"net"
 
-	"github.com/AdguardTeam/dnsproxy/proxyutil"
 	"github.com/AdguardTeam/golibs/netutil"
 	"github.com/miekg/dns"
+	"github.com/sieveLau/dnsproxy/proxyutil"
 )
 
 // isBogusNXDomain returns true if m contains at least a single IP address in

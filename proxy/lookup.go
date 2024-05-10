@@ -3,8 +3,8 @@ package proxy
 import (
 	"net"
 
-	proxynetutil "github.com/AdguardTeam/dnsproxy/internal/netutil"
 	"github.com/AdguardTeam/golibs/errors"
+	proxynetutil "github.com/sieveLau/dnsproxy/internal/netutil"
 
 	"github.com/miekg/dns"
 )

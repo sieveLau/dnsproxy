@@ -9,12 +9,12 @@ import (
 	"net"
 	"time"
 
-	"github.com/AdguardTeam/dnsproxy/proxyutil"
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/bluele/gcache"
 	"github.com/miekg/dns"
 	"github.com/quic-go/quic-go"
+	"github.com/sieveLau/dnsproxy/proxyutil"
 )
 
 // NextProtoDQ is the ALPN token for DoQ. During connection establishment,
@@ -376,9 +376,9 @@ func closeQUICConn(conn quic.Connection, code quic.ApplicationErrorCode) {
 func newServerQUICConfig() (conf *quic.Config) {
 
 	return &quic.Config{
-		MaxIdleTimeout:           maxQUICIdleTimeout,
-		MaxIncomingStreams:       math.MaxUint16,
-		MaxIncomingUniStreams:    math.MaxUint16,
+		MaxIdleTimeout:        maxQUICIdleTimeout,
+		MaxIncomingStreams:    math.MaxUint16,
+		MaxIncomingUniStreams: math.MaxUint16,
 		// Enable 0-RTT by default for all connections on the server-side.
 		Allow0RTT: true,
 	}

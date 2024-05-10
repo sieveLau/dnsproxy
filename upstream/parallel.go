@@ -5,10 +5,10 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/AdguardTeam/dnsproxy/internal/bootstrap"
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/miekg/dns"
+	"github.com/sieveLau/dnsproxy/internal/bootstrap"
 )
 
 // ErrNoUpstreams is returned from the methods that expect at least a single

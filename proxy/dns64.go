@@ -5,11 +5,11 @@ import (
 	"net"
 	"net/netip"
 
-	"github.com/AdguardTeam/dnsproxy/upstream"
 	"github.com/AdguardTeam/golibs/log"
 	"github.com/AdguardTeam/golibs/mathutil"
 	"github.com/AdguardTeam/golibs/netutil"
 	"github.com/miekg/dns"
+	"github.com/sieveLau/dnsproxy/upstream"
 )
 
 const (
