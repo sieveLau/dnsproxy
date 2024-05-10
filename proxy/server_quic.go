@@ -374,13 +374,11 @@ func closeQUICConn(conn quic.Connection, code quic.ApplicationErrorCode) {
 // newServerQUICConfig creates *quic.Config populated with the default settings.
 // This function is supposed to be used for both DoQ and DoH3 server.
 func newServerQUICConfig() (conf *quic.Config) {
-	v := newQUICAddrValidator(quicAddrValidatorCacheSize, quicAddrValidatorCacheTTL)
 
 	return &quic.Config{
 		MaxIdleTimeout:           maxQUICIdleTimeout,
 		MaxIncomingStreams:       math.MaxUint16,
 		MaxIncomingUniStreams:    math.MaxUint16,
-		RequireAddressValidation: v.requiresValidation,
 		// Enable 0-RTT by default for all connections on the server-side.
 		Allow0RTT: true,
 	}
